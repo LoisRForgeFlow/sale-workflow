@@ -41,6 +41,7 @@ class ProcurementRule(models.Model):
             'product_qty': qty,  # TODO: add 'explode_qty_update' if implemented.
         })
         wiz.change_prod_qty()
+        return True
 
 
 # TODO: reduce qty from SO

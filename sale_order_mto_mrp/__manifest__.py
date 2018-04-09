@@ -4,13 +4,13 @@
 {
     'name': 'Sale Order MTO MRP',
     'version': '11.0.1.0.0',
-    'summary': "Sale product set",
+    'summary': "wip",
     'license': 'AGPL-3',
     'author': 'Eficent, Odoo Community Association (OCA)',
     'website': 'https://github.com/OCA/sale-workflow',
     'category': 'Sale',
     'depends': [
-        'sale',
+        'sale_stock',
         'mrp',
     ],
     'data': [
