@@ -135,7 +135,20 @@ class TestSaleOrderMtoMrp(SavepointCase):
         """Test to decrease the SO line quantity and the impact on
         related MOs.
         """
-        pass
+        self.so.action_confirm()
+        mos = self.mo_obj.search([('origin', '=', self.so.name)])
+        self.assertEqual(len(mos), 2)
+        main_mo = mos.filtered(lambda mo: mo.product_id == self.prod_tp1)
+        self.assertEqual(main_mo.product_qty, 50.0)
+        sub_mo = mos.filtered(lambda mo: mo.product_id == self.prod_ti1)
+        self.assertEqual(sub_mo.product_qty, 100.0)
+        self.so.order_line.write({'product_uom_qty': 25.0})
+        # No new MO should've been created and the qty of the existing ones
+        # should've been updated
+        mos = self.mo_obj.search([('origin', '=', self.so.name)])
+        self.assertEqual(len(mos), 2)
+        self.assertEqual(main_mo.product_qty, 25.0)
+        self.assertEqual(sub_mo.product_qty, 50.0)
 
     def test_03_standalone_mo_update(self):
         """Test to update qty on a standalone MO."""
@@ -165,3 +178,6 @@ class TestSaleOrderMtoMrp(SavepointCase):
         self.assertEqual(main_mo.product_qty, 10.0)
         self.assertEqual(sub_mo.product_qty, 20.0)
 
+    def test_04_reducing_main_mo_with_sub_mo_done(self):
+        """Tests ..."""
+        pass
