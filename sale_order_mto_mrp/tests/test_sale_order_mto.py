@@ -15,6 +15,7 @@ class TestSaleOrderMto(SavepointCase):
         cls.partner_obj = cls.env['res.partner']
         cls.so_obj = cls.env['sale.order']
         cls.sol_obj = cls.env['sale.order.line']
+        cls.po_obj = cls.env['purchase.order']
         # WH and routes:
         cls.warehouse = cls.env.ref('stock.warehouse0')
         route_mto = cls.warehouse.mto_pull_id.route_id.id
@@ -70,5 +71,10 @@ class TestSaleOrderMto(SavepointCase):
         self.so.order_line.write({'product_uom_qty': 30.0})
         new_qty = self.so.picking_ids.move_lines.product_uom_qty
         self.assertEqual(new_qty, 30.0)
+        # test that the decrease propagated to PO line.
+        po = self.po_obj.search([('origin', 'ilike', self.so.name)])
+        po_line = po.order_line.filtered(
+            lambda l: l.product_id == self.prod_tp1)
+        self.assertEqual(po_line.product_qty, 30.0)
 
-    # TODO: apply decrease to PO if possible.
+    # TODO: cancel SO delete PO lines?

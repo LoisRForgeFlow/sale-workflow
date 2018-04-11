@@ -37,7 +37,7 @@ class SaleOrderLine(models.Model):
     def _decrease_product_uom_qty_actions(self, decrease):
         self.ensure_one()
         domain = self._get_domain_moves_to_decrease()
-        moves = self.env['stock.move'].search(domain)
+        moves = self.env['stock.move'].search(domain)  # TODO: evaluate: self.mapped('move_ids')
         if moves:
             moves.decrease_product_uom_qty(decrease)
             mo = moves.mapped('move_orig_ids.production_id')
@@ -49,12 +49,20 @@ class SaleOrderLine(models.Model):
                 # TODO: add 'explode_qty_update' if implemented.
                 })
                 wiz.change_prod_qty()
-            # TODO: find POs to update them...??
+            po_lines = moves.mapped('created_purchase_line_id')  # TODO: Compare with no MTO
+            po_lines_filtered = po_lines.filtered(
+                lambda l: l.order_id.state in ['draft', 'sent'])  # TODO: assess these states...
+            if po_lines_filtered:
+                # TODO check that msg is posted on PO.
+                # TODO check UoM
+                po_lines_filtered[0].product_qty -= decrease
+        return True
 
     @api.multi
     def _get_domain_moves_to_decrease(self):
         domain = [
             ('product_id', '=', self.product_id.id),
             ('origin', '=', self.order_id.name),
+            ('state', 'not in', ['done', 'cancel'])
         ]
         return domain
