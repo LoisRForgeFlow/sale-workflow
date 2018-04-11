@@ -30,9 +30,15 @@ class SaleOrderLine(models.Model):
         if lines:
             for line in lines:
                 decrease = line.product_uom_qty - values['product_uom_qty']
-                line._decrease_product_uom_qty_actions(decrease)
+                domain = self._get_domain_moves_to_decrease()
+                moves = self.env['stock.move'].search(
+                    domain)  # TODO: evaluate: self.mapped('move_ids')
+                if moves:
+                    moves.decrease_product_uom_qty(decrease)
+                # line._decrease_product_uom_qty_actions(decrease)  # TODO: remove
         return super(SaleOrderLine, self).write(values)
 
+    # TODO: remove, this is dead code now:
     @api.multi
     def _decrease_product_uom_qty_actions(self, decrease):
         self.ensure_one()
@@ -57,6 +63,7 @@ class SaleOrderLine(models.Model):
                 # TODO check UoM
                 po_lines_filtered[0].product_qty -= decrease
         return True
+    # End of dead code.
 
     @api.multi
     def _get_domain_moves_to_decrease(self):
