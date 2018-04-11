@@ -9,7 +9,7 @@ class ProcurementRule(models.Model):
     _inherit = 'procurement.rule'
 
     def _existing_mo_get_domain(self, product_id, values):
-        # TODO:bom_id? product_id?
+        # TODO:bom_id?
         domain = ()
         gpo = self.group_propagation_option
         group = (gpo == 'fixed' and self.group_id) or \
@@ -34,11 +34,15 @@ class ProcurementRule(models.Model):
             return super(ProcurementRule, self)._run_manufacture(
                 product_id, product_qty, product_uom,
                 location_id, name, origin, values)
-        # TODO: do magic. use change.production.qty
         qty = mo[0].product_qty + product_qty  # sure? uom?
-        wiz = self.env['change.production.qty'].create({
-            'mo_id': mo[0].id,
-            'product_qty': qty,  # TODO: add 'explode_qty_update' if implemented.
-        })
-        wiz.change_prod_qty()
+        produced = sum(mo[0].move_finished_ids.filtered(
+            lambda m: m.product_id == mo[0].product_id).mapped(
+            'quantity_done'))
+        # TODO: do partial reductions?
+        if not qty < produced:
+            wiz = self.env['change.production.qty'].create({
+                'mo_id': mo[0].id,
+                'product_qty': qty,  # TODO: add 'explode_qty_update' if implemented.
+            })
+            wiz.change_prod_qty()
         return True

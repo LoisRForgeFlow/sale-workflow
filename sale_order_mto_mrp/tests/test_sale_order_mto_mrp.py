@@ -17,6 +17,8 @@ class TestSaleOrderMtoMrp(SavepointCase):
         cls.mo_obj = cls.env['mrp.production']
         cls.bom_obj = cls.env['mrp.bom']
         cls.boml_obj = cls.env['mrp.bom.line']
+        cls.change_qty_wiz = cls.env['change.production.qty']
+        cls.produce_wiz = cls.env['mrp.product.produce']
         cls.so_obj = cls.env['sale.order']
         cls.sol_obj = cls.env['sale.order.line']
         # WH and routes:
@@ -112,6 +114,17 @@ class TestSaleOrderMtoMrp(SavepointCase):
             'pricelist_id': cls.env.ref('product.list0').id,
         })
 
+    def produce_mo(self, mo):
+        context = {
+            "active_model": "mrp.production",
+            "active_ids": [mo.id],
+            "active_id": mo.id,
+        }
+        prod_wiz = self.produce_wiz.with_context(context).create({
+            'product_qty': mo.product_qty})
+        prod_wiz.do_produce()
+        return True
+
     def test_01_increase_so_qty(self):
         """Test to increase the SO line quantity and the impact on
         related MOs.
@@ -162,7 +175,7 @@ class TestSaleOrderMtoMrp(SavepointCase):
         self.assertEqual(main_mo.product_qty, 15.0)
         self.assertEqual(sub_mo.product_qty, 30.0)
         # increase qty:
-        wiz = self.env['change.production.qty'].create({
+        wiz = self.change_qty_wiz.create({
             'mo_id': main_mo.id,
             'product_qty': 25.0,
         })
@@ -170,7 +183,7 @@ class TestSaleOrderMtoMrp(SavepointCase):
         self.assertEqual(main_mo.product_qty, 25.0)
         self.assertEqual(sub_mo.product_qty, 50.0)
         # decrease qty:
-        wiz = self.env['change.production.qty'].create({
+        wiz = self.change_qty_wiz.create({
             'mo_id': main_mo.id,
             'product_qty': 10.0,
         })
@@ -179,5 +192,48 @@ class TestSaleOrderMtoMrp(SavepointCase):
         self.assertEqual(sub_mo.product_qty, 20.0)
 
     def test_04_reducing_main_mo_with_sub_mo_done(self):
-        """Tests ..."""
-        pass
+        """Tests that no MO is updated to a quantity lower than the qty
+        already produced.
+        """
+        main_mo = self.mo_obj.create({
+            'product_id': self.prod_tp1.id,
+            'product_qty': 15.0,
+            'product_uom_id': self.prod_tp1.uom_id.id,
+            'bom_id': self.test_bom_1.id,
+        })
+        sub_mo = self.mo_obj.search([('origin', '=', main_mo.name)])
+        self.assertEqual(main_mo.product_qty, 15.0)
+        self.assertEqual(sub_mo.product_qty, 30.0)
+        # produce sub_mo:
+        self.produce_mo(sub_mo)
+        # decrease qty:
+        wiz = self.change_qty_wiz.create({
+            'mo_id': main_mo.id,
+            'product_qty': 10.0,
+        })
+        wiz.change_prod_qty()
+        self.assertEqual(main_mo.product_qty, 10.0)
+        # qty on sub_mo must remain unchanged:
+        self.assertEqual(sub_mo.product_qty, 30.0)
+
+    def test_05_cancel_mto_so_cancel_mo(self):
+        """Tests if the MOs responding to a Make-to-Order Sales Order are
+        also cancelled when the SO is cancelled."""
+        self.so.action_confirm()
+        mos = self.mo_obj.search([('origin', '=', self.so.name)])
+        self.so.action_cancel()
+        for state in mos.mapped('state'):
+            self.assertEqual(state, 'cancel')
+
+    def test_06_cancel_mto_so_cancel_mo_not_done(self):
+        """Tests if the MOs responding to a Make-to-Order Sales Order that
+        has been already produced/started are not cancelled when the SO
+        is cancelled."""
+        self.so.action_confirm()
+        mos = self.mo_obj.search([('origin', '=', self.so.name)])
+        main_mo = mos.filtered(lambda mo: mo.product_id == self.prod_tp1)
+        sub_mo = mos.filtered(lambda mo: mo.product_id == self.prod_ti1)
+        self.produce_mo(sub_mo)
+        self.so.action_cancel()
+        self.assertEqual(main_mo.state, 'cancel')
+        self.assertNotEqual(sub_mo.state, 'cancel')

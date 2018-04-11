@@ -35,3 +35,14 @@ class MrpProduction(models.Model):
                 # product_id, product_qty, product_uom, location_id,
                 # name, origin, values)
         return res
+
+    @api.multi
+    def action_cancel(self):
+        # TODO: cancel MOs
+        mos = self.mapped('move_raw_ids.move_orig_ids.production_id')
+        res = super(MrpProduction, self).action_cancel()
+        mos_to_cancel = mos.filtered(
+            lambda r: r.state in ['confirmed', 'planned'])  # TODO: handle in progress MOs?
+        if mos_to_cancel:
+            mos_to_cancel.action_cancel()
+        return res
