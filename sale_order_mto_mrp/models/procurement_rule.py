@@ -14,12 +14,15 @@ class ProcurementRule(models.Model):
         gpo = self.group_propagation_option
         group = (gpo == 'fixed' and self.group_id) or \
                 (gpo == 'propagate' and values['group_id']) or False
+        date_planned = fields.Datetime.to_string(
+            self._get_date_planned(product_id, values))
 
         domain += (
             ('product_id', '=', product_id.id),
             ('state', 'not in', ['cancel', 'done']),
             ('picking_type_id', '=', self.picking_type_id.id),
             ('company_id', '=', values['company_id'].id),
+            ('date_planned_start', '=', date_planned)
             )
         if group:
             domain += (('procurement_group_id', '=', group.id),)
