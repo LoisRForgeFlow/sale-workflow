@@ -11,6 +11,7 @@
     'category': 'Sale',
     'depends': [
         'sale_stock',
+        'sale_order_dates',
         'mrp',
     ],
     'data': [

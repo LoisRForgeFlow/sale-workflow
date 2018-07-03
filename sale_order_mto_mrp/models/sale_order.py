@@ -2,6 +2,8 @@
 #   (http://www.eficent.com)
 # License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl.html).
 
+from datetime import datetime
+
 from odoo import api, fields, models, _
 from odoo.tools import float_compare
 
@@ -36,7 +38,31 @@ class SaleOrderLine(models.Model):
                 if moves:
                     moves.decrease_product_uom_qty(decrease)
                 # line._decrease_product_uom_qty_actions(decrease)  # TODO: remove
+        # Update dates:
+        if 'requested_date' in values:
+            moves = self.mapped('move_ids').filtered(
+                lambda m: m.state not in ['done', 'cancel'])
+            if moves:
+                if not isinstance(values['requested_date'], datetime):
+                    new_date = fields.Datetime.from_string(
+                        values['requested_date'])
+                else:
+                    new_date = values['requested_date']
+
+                for move in moves:
+                    old_date = fields.Datetime.from_string(
+                        move.sale_line_id.requested_date)
+                    move.date_expected = self._get_date_expected_from_so(
+                        move, new_date, old_date)
         return super(SaleOrderLine, self).write(values)
+
+    @api.model
+    def _get_date_expected_from_so(self, move, new_date, old_date):
+        """Allow to modify the way the associated moves are rescheduled from
+        the SO line."""
+        delta = new_date - old_date
+        date_expected = fields.Datetime.from_string(move.date_expected) + delta
+        return date_expected
 
     # TODO: remove, this is dead code now:
     @api.multi

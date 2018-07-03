@@ -2,6 +2,8 @@
 #   (http://www.eficent.com)
 # License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl.html).
 
+from datetime import datetime
+
 from odoo import api, fields, models, _
 from odoo.exceptions import UserError
 from odoo.tools import float_compare
@@ -37,8 +39,41 @@ class SaleOrderLine(models.Model):
                 increase = values['product_uom_qty'] - move.product_qty
                 if move.move_orig_ids:
                     move.move_orig_ids.increase_product_uom_qty(increase)
+        if 'date_expected' in values:
+            # if there is a MO directly linked to the next move
+            # (MTO SO -> picking (stock move being written now) ->
+            # MO (finished products stock moves))
+            # we update the MO date accordingly
+            # (to update of the stock moves of the MO we rely on
+            # mrp.production model, see
+            # https://github.com/odoo/odoo/pull/25424)
+            if not isinstance(values['date_expected'], datetime):
+                new_date = fields.Datetime.from_string(values['date_expected'])
+            else:
+                new_date = values['date_expected']
+            for move in self:
+                mos = move.mapped('move_orig_ids.production_id')
+                if mos:
+                    old_date = fields.Datetime.from_string(move.date_expected)
+                    delta = new_date - old_date
+                    for mo in mos:
+                        mo_date_start, mo_date_end = self._get_new_mo_dates(
+                            mo, delta)
+                        mo.write({
+                            'date_planned_start': mo_date_start,
+                            'date_planned_finished': mo_date_end,
+                        })
         res = super().write(values)
         return res
+
+    @api.model
+    def _get_new_mo_dates(self, manuf_order, delta):
+        """Allow to modify the way the MO are rescheduled."""
+        mo_date_end = fields.Datetime.from_string(
+            manuf_order.date_planned_finished) + delta
+        mo_date_start = fields.Datetime.from_string(
+            manuf_order.date_planned_start) + delta
+        return mo_date_start, mo_date_end
 
     @api.multi
     def decrease_product_uom_qty(self, decrease):

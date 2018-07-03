@@ -2,6 +2,9 @@
 #   (http://www.eficent.com)
 # License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl.html).
 
+from datetime import datetime, timedelta
+
+from odoo import fields
 from odoo.tests.common import SavepointCase
 
 
@@ -24,8 +27,12 @@ class TestSaleOrderMtoMrp(SavepointCase):
         # WH and routes:
         cls.warehouse = cls.env.ref('stock.warehouse0')
         route_manufacture = cls.warehouse.manufacture_pull_id.route_id.id
-        route_mto = cls.warehouse.mto_pull_id.route_id.id
         route_buy = cls.env.ref('purchase.route_warehouse0_buy').id
+        route_mto_id = cls.warehouse.mto_pull_id.route_id
+        route_mto = route_mto_id.id
+        # Add 2 days of delay to MTO rules
+        route_mto_id.pull_ids.write({'delay': 2})
+
         # Partners:
         vendor1 = cls.partner_obj.create({'name': 'Vendor 1'})
         customer1 = cls.partner_obj.create({'name': 'Customer 1'})
@@ -100,6 +107,24 @@ class TestSaleOrderMtoMrp(SavepointCase):
             'product_qty': 1.0,
         })
 
+        # Dates:
+        cls.date_1 = fields.Datetime.to_string(
+            datetime.today() + timedelta(days=1))
+        cls.date_3 = fields.Datetime.to_string(
+            datetime.today() + timedelta(days=3))
+        cls.date_5 = fields.Datetime.to_string(
+            datetime.today() + timedelta(days=5))
+        cls.date_8 = fields.Datetime.to_string(
+            datetime.today() + timedelta(days=8))
+        cls.date_10 = fields.Datetime.to_string(
+            datetime.today() + timedelta(days=10))
+        cls.date_12 = fields.Datetime.to_string(
+            datetime.today() + timedelta(days=12))
+        cls.date_17 = fields.Datetime.to_string(
+            datetime.today() + timedelta(days=17))
+        cls.date_19 = fields.Datetime.to_string(
+            datetime.today() + timedelta(days=19))
+
         # Create SO:
         cls.so = cls.so_obj.create({
             'partner_id': customer1.id,
@@ -110,7 +135,9 @@ class TestSaleOrderMtoMrp(SavepointCase):
                 'product_id': cls.prod_tp1.id,
                 'product_uom_qty': 50.0,
                 'product_uom': cls.prod_tp1.uom_id.id,
-                'price_unit': cls.prod_tp1.list_price})],
+                'price_unit': cls.prod_tp1.list_price,
+                'requested_date': cls.date_12,
+            })],
             'pricelist_id': cls.env.ref('product.list0').id,
         })
 
@@ -237,3 +264,32 @@ class TestSaleOrderMtoMrp(SavepointCase):
         self.so.action_cancel()
         self.assertEqual(main_mo.state, 'cancel')
         self.assertNotEqual(sub_mo.state, 'cancel')
+
+    # Depends on https://github.com/odoo/odoo/pull/25424
+    def test_07_modify_requested_date(self):
+        """Tests if the requested date modification is propagated to the
+        already existing MOs."""
+        self.so.action_confirm()
+        mos = self.mo_obj.search([('origin', '=', self.so.name)])
+        main_mo = mos.filtered(lambda mo: mo.product_id == self.prod_tp1)
+        sub_mo = mos.filtered(lambda mo: mo.product_id == self.prod_ti1)
+        picking = self.so.picking_ids[0]
+        self.assertEqual(picking.scheduled_date, self.date_10)
+        self.assertEqual(main_mo.date_planned_start, self.date_5)
+        self.assertEqual(main_mo.date_planned_finished, self.date_10)
+        self.assertEqual(sub_mo.date_planned_start, self.date_3)
+        self.assertEqual(sub_mo.date_planned_finished, self.date_5)
+        # Bring forward Requested Date (-2 days):
+        self.so.order_line[0].requested_date = self.date_10
+        self.assertEqual(picking.scheduled_date, self.date_8)
+        self.assertEqual(main_mo.date_planned_start, self.date_3)
+        self.assertEqual(main_mo.date_planned_finished, self.date_8)
+        self.assertEqual(sub_mo.date_planned_start, self.date_1)
+        self.assertEqual(sub_mo.date_planned_finished, self.date_3)
+        # Delay Requested Date (+9 days):
+        self.so.order_line[0].requested_date = self.date_19
+        self.assertEqual(picking.scheduled_date, self.date_17)
+        self.assertEqual(main_mo.date_planned_start, self.date_12)
+        self.assertEqual(main_mo.date_planned_finished, self.date_17)
+        self.assertEqual(sub_mo.date_planned_start, self.date_10)
+        self.assertEqual(sub_mo.date_planned_finished, self.date_12)
