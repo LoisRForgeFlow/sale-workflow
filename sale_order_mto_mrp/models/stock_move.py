@@ -56,12 +56,14 @@ class SaleOrderLine(models.Model):
                 if mos:
                     old_date = fields.Datetime.from_string(move.date_expected)
                     delta = new_date - old_date
-                    for mo in mos:
+                    for mo in mos.with_context(do_not_propagate=True):
                         mo_date_start, mo_date_end = self._get_new_mo_dates(
                             mo, delta)
                         mo.write({
-                            'date_planned_start': mo_date_start,
-                            'date_planned_finished': mo_date_end,
+                            'date_planned_start': fields.Datetime.to_string(
+                                mo_date_start),
+                            'date_planned_finished': fields.Datetime.to_string(
+                                mo_date_end),
                         })
         res = super().write(values)
         return res

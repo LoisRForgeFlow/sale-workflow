@@ -52,8 +52,9 @@ class SaleOrderLine(models.Model):
                 for move in moves:
                     old_date = fields.Datetime.from_string(
                         move.sale_line_id.requested_date)
-                    move.date_expected = self._get_date_expected_from_so(
-                        move, new_date, old_date)
+                    move.date_expected = fields.Datetime.to_string(
+                        self._get_date_expected_from_so(
+                            move, new_date, old_date))
         return super(SaleOrderLine, self).write(values)
 
     @api.model
