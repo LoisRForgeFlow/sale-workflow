@@ -97,6 +97,7 @@ class SaleOrderLine(models.Model):
         domain = [
             ('product_id', '=', self.product_id.id),
             ('origin', '=', self.order_id.name),
-            ('state', 'not in', ['done', 'cancel'])
+            ('state', 'not in', ['done', 'cancel']),
+            ('sale_line_id', '=', self.id),
         ]
         return domain

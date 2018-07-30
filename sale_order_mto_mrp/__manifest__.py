@@ -11,8 +11,9 @@
     'category': 'Sale',
     'depends': [
         'sale_stock',
-        'sale_order_dates',
+        'sale_order_line_date',
         'mrp',
+        'purchase',
     ],
     'data': [
         # 'views/product_set.xml',
