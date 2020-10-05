@@ -14,6 +14,8 @@ class SaleOrderLine(models.Model):
 
     @api.multi
     def write(self, values):
+        # Disable odoo propagation to avoid conflicts.
+        self = self.with_context(do_not_propagate=True)
         decreasing_moves = increasing_moves = False
         if 'product_qty' in values:
             precision = self.env['decimal.precision'].precision_get(
